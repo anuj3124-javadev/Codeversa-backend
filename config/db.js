@@ -14,6 +14,7 @@ if (!fs.existsSync(dbDir)) {
 const sequelize = new Sequelize({
   dialect: 'sqlite',
   storage: dbPath,
+  dialectModule: require('better-sqlite3'), // Use better-sqlite3
   logging: process.env.NODE_ENV === 'development' ? console.log : false,
   pool: {
     max: 5,
