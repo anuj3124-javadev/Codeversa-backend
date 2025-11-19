@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const { sequelize } = require('./models');
+const config = require('./config/env');
 
 const app = express();
 
@@ -19,37 +20,35 @@ app.use(cors({
   ],
   credentials: true
 }));
-app.use(morgan('combined'));
+app.use(morgan(config.env === 'development' ? 'dev' : 'combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Health check with database status
+// Health check
 app.get('/health', async (req, res) => {
   try {
-    // Test database connection
     await sequelize.authenticate();
-    
     res.status(200).json({ 
       status: 'OK', 
       timestamp: new Date().toISOString(),
       service: 'CodeVerse Backend',
       database: 'connected',
-      environment: process.env.NODE_ENV || 'production'
+      environment: config.env,
+      ai_service: config.ai.service
     });
   } catch (error) {
-    // Database is down but server is running
     res.status(200).json({ 
       status: 'DEGRADED', 
       timestamp: new Date().toISOString(),
       service: 'CodeVerse Backend', 
       database: 'disconnected',
-      environment: process.env.NODE_ENV || 'production',
+      environment: config.env,
       message: 'Database connection failed but API is running'
     });
   }
 });
 
-// Routes (they should handle database errors internally)
+// Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/run', require('./routes/run'));
 app.use('/api/ai', require('./routes/ai'));
@@ -57,13 +56,23 @@ app.use('/api/snippets', require('./routes/snippets'));
 app.use('/api/contact', require('./routes/contact'));
 app.use('/api/admin', require('./routes/admin'));
 
+// Test endpoint for run route
+app.get('/api/run/test', (req, res) => {
+  res.json({ 
+    message: 'Run route is working!',
+    database: config.db.host,
+    ai_service: config.ai.service
+  });
+});
+
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
     message: '🚀 CodeVerse Lite Backend API',
     version: '1.0.0',
-    status: 'running',
-    environment: process.env.NODE_ENV || 'production',
+    environment: config.env,
+    database: `${config.db.host}:${config.db.port}`,
+    ai_service: config.ai.service,
     endpoints: {
       auth: '/api/auth',
       run: '/api/run', 
@@ -76,23 +85,12 @@ app.get('/', (req, res) => {
   });
 });
 
-// Error handling middleware
+// Error handling
 app.use((err, req, res, next) => {
-  console.error('❌ Error:', err.message);
-  
-  // Database connection errors
-  if (err.name === 'SequelizeConnectionError') {
-    return res.status(503).json({ 
-      error: 'Service temporarily unavailable',
-      message: 'Database connection failed'
-    });
-  }
-  
+  console.error('❌ Error:', err.stack);
   res.status(500).json({ 
-    error: 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { 
-      message: err.message
-    })
+    error: 'Something went wrong!',
+    message: config.env === 'development' ? err.message : 'Internal server error'
   });
 });
 
@@ -100,7 +98,8 @@ app.use((err, req, res, next) => {
 app.use('*', (req, res) => {
   res.status(404).json({ 
     error: 'Route not found',
-    path: req.originalUrl
+    path: req.originalUrl,
+    method: req.method
   });
 });
 

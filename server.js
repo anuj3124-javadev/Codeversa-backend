@@ -1,47 +1,31 @@
 const app = require('./app');
+const config = require('./config/env');
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || config.port;
 const HOST = process.env.HOST || '0.0.0.0';
 
-const server = app.listen(PORT, HOST, () => {
+app.listen(PORT, HOST, () => {
   console.log('🚀 CodeVerse Lite Backend Server Started');
   console.log(`📍 Host: ${HOST}`);
   console.log(`📍 Port: ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'production'}`);
-  console.log(`🌐 Live URL: https://codeversa-backend.onrender.com`);
+  console.log(`🌍 Environment: ${config.env}`);
+  console.log(`📊 Database: ${config.db.host}:${config.db.port}`);
+  console.log(`🤖 AI Service: ${config.ai.service}`);
   console.log(`🕒 Started at: ${new Date().toISOString()}`);
   console.log('📋 Available endpoints:');
-  console.log(`   https://codeversa-backend.onrender.com/health`);
-  console.log(`   https://codeversa-backend.onrender.com/api/auth`);
-  console.log(`   https://codeversa-backend.onrender.com/api/run`);
+  console.log(`   http://${HOST}:${PORT}/health`);
+  console.log(`   http://${HOST}:${PORT}/api/auth`);
+  console.log(`   http://${HOST}:${PORT}/api/run`);
   console.log('─────────────────────────────────────');
 });
 
-// Improved graceful shutdown for Render
-let isShuttingDown = false;
-
+// Graceful shutdown
 process.on('SIGTERM', () => {
-  if (isShuttingDown) return;
-  isShuttingDown = true;
-  
-  console.log('🔄 SIGTERM received, shutting down gracefully...');
-  
-  server.close(() => {
-    console.log('✅ Server closed gracefully');
-    process.exit(0);
-  });
-  
-  // Force close after 10 seconds
-  setTimeout(() => {
-    console.log('⚠️  Forcing shutdown...');
-    process.exit(1);
-  }, 10000);
+  console.log('SIGTERM received, shutting down gracefully');
+  process.exit(0);
 });
 
 process.on('SIGINT', () => {
-  console.log('🔄 SIGINT received, shutting down...');
-  server.close(() => {
-    console.log('✅ Server closed gracefully');
-    process.exit(0);
-  });
+  console.log('SIGINT received, shutting down gracefully');
+  process.exit(0);
 });
