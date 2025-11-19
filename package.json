@@ -4,8 +4,10 @@
   "description": "Backend for CodeVerse Lite - Online Code Compiler and AI Assistant",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+   "start": "node server.js",
     "dev": "nodemon server.js",
+    "build": "echo 'No build step required for Node.js'",
+    "render-start": "node server.js",
     "init-db": "node scripts/initDB.js",
     "test": "jest"
   },
