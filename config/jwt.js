@@ -1,0 +1,15 @@
+const jwt = require('jsonwebtoken');
+const config = require('./env');
+
+const generateToken = (payload) => {
+  return jwt.sign(payload, config.jwt.secret, { expiresIn: '7d' });
+};
+
+const verifyToken = (token) => {
+  return jwt.verify(token, config.jwt.secret);
+};
+
+module.exports = {
+  generateToken,
+  verifyToken
+};
