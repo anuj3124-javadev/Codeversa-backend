@@ -1,15 +1,39 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { Mistral } = require('@mistralai/mistralai');
 const config = require('../config/env');
 
 class AIService {
   constructor() {
-    this.genAI = new GoogleGenerativeAI(config.ai.apiKey || process.env.GEMINI_API_KEY);
-    this.model = this.genAI.getGenerativeModel({ model: "gemini-pro" });
+    // Initialize Mistral client
+    this.client = new Mistral({
+      apiKey: config.ai.mistralKey || process.env.MISTRAL_API_KEY,
+    });
+    this.model = config.ai.mistralModel || 'mistral-medium';
+  }
+
+  // Helper to create a chat completion with a system prompt and user message
+  async createChatCompletion(systemPrompt, userMessage) {
+    try {
+      const response = await this.client.chat.complete({
+        model: this.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage }
+        ],
+        temperature: 0.2, // Lower temperature for more deterministic JSON output
+        responseFormat: { type: "json_object" } // Request JSON output (Mistral supports this)
+      });
+
+      const content = response.choices[0].message.content;
+      return content;
+    } catch (error) {
+      throw new Error(`Mistral AI error: ${error.message}`);
+    }
   }
 
   async explainCode(code, language) {
-    const prompt = `
-You are CodeVerse Assistant, an expert programming tutor. Explain the following ${language} code in a clear, concise manner.
+    const systemPrompt = `You are CodeVerse Assistant, an expert programming tutor. You always respond in valid JSON.`;
+    const userMessage = `
+Explain the following ${language} code in a clear, concise manner.
 
 Code:
 ${code}
@@ -28,21 +52,18 @@ Return your response in JSON format with this structure:
 `;
 
     try {
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-      
-      // Clean the response and parse JSON
-      const cleanedResponse = this.cleanJSONResponse(text);
-      return JSON.parse(cleanedResponse);
+      const text = await this.createChatCompletion(systemPrompt, userMessage);
+      const cleaned = this.cleanJSONResponse(text);
+      return JSON.parse(cleaned);
     } catch (error) {
       throw new Error(`AI service error: ${error.message}`);
     }
   }
 
   async fixCode(code, language, error) {
-    const prompt = `
-You are CodeVerse Assistant. Fix the following ${language} code that has this error:
+    const systemPrompt = `You are CodeVerse Assistant. You always respond in valid JSON.`;
+    const userMessage = `
+Fix the following ${language} code that has this error:
 
 Error: ${error}
 
@@ -58,20 +79,18 @@ Please provide the fixed code and explanation. Return in JSON format:
 `;
 
     try {
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-      
-      const cleanedResponse = this.cleanJSONResponse(text);
-      return JSON.parse(cleanedResponse);
+      const text = await this.createChatCompletion(systemPrompt, userMessage);
+      const cleaned = this.cleanJSONResponse(text);
+      return JSON.parse(cleaned);
     } catch (error) {
       throw new Error(`AI service error: ${error.message}`);
     }
   }
 
   async optimizeCode(code, language) {
-    const prompt = `
-You are CodeVerse Assistant. Optimize the following ${language} code for better performance, readability, or best practices.
+    const systemPrompt = `You are CodeVerse Assistant. You always respond in valid JSON.`;
+    const userMessage = `
+Optimize the following ${language} code for better performance, readability, or best practices.
 
 Code:
 ${code}
@@ -87,21 +106,18 @@ Provide optimized version and explanation. Return in JSON format:
 `;
 
     try {
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-      
-      const cleanedResponse = this.cleanJSONResponse(text);
-      return JSON.parse(cleanedResponse);
+      const text = await this.createChatCompletion(systemPrompt, userMessage);
+      const cleaned = this.cleanJSONResponse(text);
+      return JSON.parse(cleaned);
     } catch (error) {
       throw new Error(`AI service error: ${error.message}`);
     }
   }
 
-  // New method: Convert code between languages
   async convertCode(code, sourceLanguage, targetLanguage) {
-    const prompt = `
-You are CodeVerse Assistant. Convert the following ${sourceLanguage} code to ${targetLanguage}:
+    const systemPrompt = `You are CodeVerse Assistant. You always respond in valid JSON.`;
+    const userMessage = `
+Convert the following ${sourceLanguage} code to ${targetLanguage}:
 
 Code:
 ${code}
@@ -115,29 +131,31 @@ Provide the converted code and explanation. Return in JSON format:
 `;
 
     try {
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-      
-      const cleanedResponse = this.cleanJSONResponse(text);
-      return JSON.parse(cleanedResponse);
+      const text = await this.createChatCompletion(systemPrompt, userMessage);
+      const cleaned = this.cleanJSONResponse(text);
+      return JSON.parse(cleaned);
     } catch (error) {
       throw new Error(`AI service error: ${error.message}`);
     }
   }
 
-  // New method: General coding chat
   async chat(message, context = '') {
-    const prompt = context ? 
-      `Context: ${context}\n\nUser Question: ${message}` : 
-      `User Question: ${message}`;
+    const systemPrompt = context
+      ? `You are CodeVerse Assistant, a helpful coding expert. Use the following context to answer the user's question:\n\n${context}`
+      : `You are CodeVerse Assistant, a helpful coding expert.`;
 
     try {
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      
+      const response = await this.client.chat.complete({
+        model: this.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: message }
+        ],
+        temperature: 0.5
+      });
+
       return {
-        response: response.text(),
+        response: response.choices[0].message.content,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
@@ -145,7 +163,7 @@ Provide the converted code and explanation. Return in JSON format:
     }
   }
 
-  // Helper method to clean JSON responses from Gemini
+  // Helper method to clean JSON responses
   cleanJSONResponse(text) {
     // Remove markdown code blocks if present
     let cleaned = text.replace(/```json\s?/g, '').replace(/```\s?/g, '');
@@ -170,18 +188,6 @@ Provide the converted code and explanation. Return in JSON format:
       keyPoints: [],
       complexity: "Unable to analyze complexity"
     });
-  }
-
-  // Helper method to extract code from responses
-  extractCodeFromResponse(text) {
-    const codeBlockRegex = /```(?:\w+)?\n([\s\S]*?)```/;
-    const match = text.match(codeBlockRegex);
-    
-    if (match && match[1]) {
-      return match[1].trim();
-    }
-    
-    return text;
   }
 }
 

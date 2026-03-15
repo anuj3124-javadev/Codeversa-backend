@@ -1,88 +1,81 @@
 const Joi = require('joi');
-require('dotenv').config(); // Load .env file
+require('dotenv').config();
 
-// Schema based on your .env file
 const envVarsSchema = Joi.object({
-  NODE_ENV: Joi.string()
-    .valid('development', 'production', 'test')
-    .default('development'),
+  NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
   PORT: Joi.number().default(5000),
-  
-  // MySQL Configuration
+
+  // MySQL
   DB_HOST: Joi.string().default('localhost'),
   DB_PORT: Joi.number().default(3306),
   DB_USER: Joi.string().default('root'),
   DB_PASSWORD: Joi.string().default(''),
   DB_NAME: Joi.string().default('codeverse'),
-  
+
   // JWT
   JWT_SECRET: Joi.string().default('fallback-jwt-secret-for-development'),
-  
+
   // AI Services
-  GEMINI_API_KEY: Joi.string().default(''),
+  MISTRAL_API_KEY: Joi.string().default(''),
+  MISTRAL_MODEL: Joi.string().default('mistral-medium'),
   OPENAI_API_KEY: Joi.string().optional().allow(''),
-  AI_SERVICE: Joi.string().valid('openai', 'gemini').default('gemini'),
-  
+  GEMINI_API_KEY: Joi.string().optional().allow(''),
+  AI_SERVICE: Joi.string().valid('openai', 'gemini', 'mistral').default('mistral'),
+
   // Docker
   DOCKER_HOST: Joi.string().default('localhost'),
-  
+
   // Rate limiting
   RATE_LIMIT_REQUESTS: Joi.number().default(60),
   RATE_LIMIT_WINDOW_MS: Joi.number().default(60000)
 }).unknown();
 
-const { value: envVars, error } = envVarsSchema.validate(process.env, { 
+const { value: envVars, error } = envVarsSchema.validate(process.env, {
   abortEarly: false,
   allowUnknown: true
 });
 
 if (error) {
   console.warn('⚠️  Config validation warnings:');
-  error.details.forEach(detail => {
-    console.warn(`   - ${detail.message}`);
-  });
-  
-  // Don't throw error, use defaults
+  error.details.forEach(detail => console.warn(`   - ${detail.message}`));
   console.log('✅ Using default configuration with warnings');
 }
 
 const config = {
-  env: envVars?.NODE_ENV || 'development',
-  port: envVars?.PORT || 5000,
+  env: envVars.NODE_ENV,
+  port: envVars.PORT,
   db: {
-    host: envVars?.DB_HOST || 'localhost',
-    port: envVars?.DB_PORT || 3306,
-    user: envVars?.DB_USER || 'root',
-    password: envVars?.DB_PASSWORD || '',
-    name: envVars?.DB_NAME || 'codeverse',
+    host: envVars.DB_HOST,
+    port: envVars.DB_PORT,
+    user: envVars.DB_USER,
+    password: envVars.DB_PASSWORD,
+    name: envVars.DB_NAME,
     dialect: 'mysql'
   },
   jwt: {
-    secret: envVars?.JWT_SECRET || 'dev-jwt-secret-change-in-production',
+    secret: envVars.JWT_SECRET,
     expiresIn: '7d'
   },
   ai: {
-    geminiKey: envVars?.GEMINI_API_KEY,
-    openaiKey: envVars?.OPENAI_API_KEY,
-    service: envVars?.AI_SERVICE || 'gemini',
+    mistralKey: envVars.MISTRAL_API_KEY,
+    mistralModel: envVars.MISTRAL_MODEL,
+    geminiKey: envVars.GEMINI_API_KEY,
+    openaiKey: envVars.OPENAI_API_KEY,
+    service: envVars.AI_SERVICE,
     rateLimit: {
-      requests: envVars?.RATE_LIMIT_REQUESTS || 60,
-      windowMs: envVars?.RATE_LIMIT_WINDOW_MS || 60000
+      requests: envVars.RATE_LIMIT_REQUESTS,
+      windowMs: envVars.RATE_LIMIT_WINDOW_MS
     }
   },
   docker: {
-    host: envVars?.DOCKER_HOST || 'localhost'
+    host: envVars.DOCKER_HOST
   }
 };
 
-// Log configuration (without sensitive data)
 console.log('✅ Config loaded successfully');
 console.log(`🌍 Environment: ${config.env}`);
 console.log(`📊 Database: ${config.db.host}:${config.db.port}`);
-console.log(`📁 Database Name: ${config.db.name}`);
-console.log(`👤 Database User: ${config.db.user}`);
 console.log(`🤖 AI Service: ${config.ai.service}`);
-console.log(`🔑 JWT: ${config.jwt.secret ? '✓ Set' : '✗ Missing'}`);
-console.log(`🔑 Gemini API Key: ${config.ai.geminiKey ? '✓ Set' : '✗ Missing'}`);
+console.log(`🔑 Mistral API Key: ${config.ai.mistralKey ? '✓ Set' : '✗ Missing'}`);
 
 module.exports = config;
